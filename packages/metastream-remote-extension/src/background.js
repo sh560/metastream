@@ -152,6 +152,10 @@ const CONTENT_SCRIPTS = [
   {
     matches: ['https://*.twitch.tv/*'],
     file: '/scripts/twitch.js'
+  },
+  {
+    matches: ['https://*.crunchyroll.com/*'],
+    file: '/scripts/crunchyroll.js'
   }
 ]
 
@@ -485,6 +489,8 @@ const stopWatchingTab = tabId => {
     chrome.webNavigation.onHistoryStateUpdated.removeListener(onHistoryStateUpdated)
     chrome.tabs.onRemoved.removeListener(onTabRemove)
     chrome.webRequest.onBeforeSendHeaders.removeListener(onBeforeSendHeaders)
+
+    pauseMediaInOtherTabs()
   }
 
   console.log(`Metastream stopped watching tabId=${tabId}`)

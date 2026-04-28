@@ -218,6 +218,9 @@
       theaterModeSelectors: [
         '#vilosCanvas', // crunchyroll
         '#velocity-canvas', // crunchyroll
+        '.video-player-wrapper', // crunchyroll player wrapper
+        '#player-container', // crunchyroll player container
+        '.bitmovinplayer-container', // crunchyroll player container
         '.libassjs-canvas', // vrv
         '.player-timedtext', // netflix
         '.ytp-caption-segment' // youtube
@@ -838,6 +841,12 @@
       // Always hide document scrollbar while in fullscreen.
       document.body.style.setProperty('overflow', 'hidden', 'important')
 
+      // Remove any CSS constraints on the fullscreen container that might prevent scaling
+      if (fullscreenContainer !== document.documentElement) {
+        fullscreenContainer.style.setProperty('max-width', 'none', 'important')
+        fullscreenContainer.style.setProperty('max-height', 'none', 'important')
+      }
+
       const { innerWidth: viewportWidth, innerHeight: viewportHeight } = window
       const { width, height, left, top } =
         fullscreenElement instanceof HTMLVideoElement
@@ -905,10 +914,30 @@
         }
       } while ((container = container.parentNode))
 
-      // If fullscreen container is not at the top left of the viewport, revert
-      // to document.
-      if (fullscreenContainer && fullscreenContainer.getBoundingClientRect().left > 0) {
-        fullscreenContainer = document.documentElement
+      // Get the bounding rect of the current container
+      const containerRect = fullscreenContainer.getBoundingClientRect()
+      const isContainerOffScreen = containerRect.left > 0 || containerRect.top > 0
+
+      // For Crunchyroll and other sites, if container is offset or too constrained, use documentElement
+      // This ensures consistent fullscreen behavior across different video players
+      if (isContainerOffScreen || fullscreenContainer !== document.documentElement) {
+        const containerStyle = getComputedStyle(fullscreenContainer)
+        const hasMaxConstraints =
+          containerStyle.maxWidth && containerStyle.maxWidth !== 'none' ||
+          containerStyle.maxHeight && containerStyle.maxHeight !== 'none'
+
+        // Check if using documentElement would give us better scaling
+        const docRect = document.documentElement.getBoundingClientRect()
+        const docArea = docRect.width * docRect.height
+        const containerArea = containerRect.width * containerRect.height
+
+        // Prefer documentElement if:
+        // - Container is offset from top-left
+        // - Container has max-width/max-height constraints
+        // - documentElement is significantly larger and would provide better scaling
+        if (isContainerOffScreen || hasMaxConstraints || docArea > containerArea * 1.2) {
+          fullscreenContainer = document.documentElement
+        }
       }
 
       fullscreenElement = target

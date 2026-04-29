@@ -35,7 +35,6 @@
 
     let cachedVolumeSlider
     let cachedVolumeLabel
-    let isProgrammaticVolumeSync = false
 
     const getVolumeSlider = () => {
       if (cachedVolumeSlider && cachedVolumeSlider.isConnected) return cachedVolumeSlider
@@ -47,43 +46,43 @@
       return (cachedVolumeLabel = document.querySelector('[data-testid="volume-slider-percentage"]'))
     }
 
-    // Metastream uses log-scaled volume; invert to get linear 0-1 (ln(v*1000) / ln(1000))
-    const unscaleMetastreamVolume = volume => {
-      if (!volume) return 0
-      return Math.min(1, Math.max(0, Math.log(volume * 1000) / 6.908))
-    }
-
-    const syncVolumeUI = volume => {
+    const syncVolumeUI = percent => {
       const slider = getVolumeSlider()
-      if (!slider) return
-
-      const displayVolume = unscaleMetastreamVolume(volume)
-      const sliderMax = Number(slider.max) || 100
-      const sliderStep = Number(slider.step) || 1
-      const percent = Math.min(100, Math.max(0, Math.round(displayVolume * 100)))
-      const rawValue = Math.round((sliderMax * displayVolume) / sliderStep) * sliderStep
-      const internalValue = String(Math.min(sliderMax, Math.max(0, rawValue)))
-
-      const oldValue = slider.value
-      slider.value = internalValue
-      slider.setAttribute('aria-valuenow', internalValue)
-      slider.style.setProperty('--volume-percent', `${percent}%`)
-
-      if (slider.value !== oldValue) {
-        isProgrammaticVolumeSync = true
-        slider.dispatchEvent(new Event('input', { bubbles: true }))
-        setTimeout(() => { isProgrammaticVolumeSync = false }, 0)
+      if (slider) {
+        const value = String(percent)
+        slider.value = value
+        slider.setAttribute('aria-valuenow', value)
+        slider.style.setProperty('--volume-percent', `${percent}%`)
       }
-
       const label = getVolumeLabel()
       if (label) label.textContent = String(percent)
     }
 
-    document.addEventListener('volumechange', e => {
-      if (!(e.target instanceof HTMLVideoElement)) return
-      if (isProgrammaticVolumeSync) return
-      syncVolumeUI(e.target.muted ? 0 : e.target.volume)
-    }, true)
+    // Crunchyroll's slider max is 92, not 100 — video.volume = sliderValue / 100,
+    // so slider = video.volume * 100. Metastream sends video.volume directly as
+    // set-media-volume payload, meaning displayPercent = round(payload * 92).
+    // We listen on the message directly (not volumechange) because Crunchyroll's
+    // own handler resets the slider after volumechange fires.
+    window.addEventListener('message', e => {
+      if (e.origin !== location.origin) return
+      const { data } = e
+      if (!data || data.type !== 'set-media-volume') return
+
+      const payload = data.payload
+      const percent = Math.round(payload * 92)
+
+      console.log('[metastream:crunchyroll] set-media-volume', { payload, percent })
+
+      setTimeout(() => {
+        const slider = getVolumeSlider()
+        console.log('[metastream:crunchyroll] syncVolumeUI (deferred)', {
+          payload,
+          percent,
+          sliderBefore: slider ? slider.value : 'not found',
+        })
+        syncVolumeUI(percent)
+      }, 0)
+    })
 
     document.addEventListener('metastreamplay', e => {
       const video = getVideoElement()

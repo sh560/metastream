@@ -569,10 +569,10 @@
         this.onPlaybackChange(event, 'ended')
       }
 
-      onSeeked() {
-        if (event.isTrusted) {
-          dispatchMediaEvent({ type: 'media-seeked', payload: this.getCurrentTime() })
-        }
+      onSeeked(event) {
+        const isUserInitiated = Boolean(event && event.isTrusted)
+        if (!isUserInitiated) return
+        dispatchMediaEvent({ type: 'media-seeked', payload: this.getCurrentTime() })
       }
 
       onTimeUpdate() {
